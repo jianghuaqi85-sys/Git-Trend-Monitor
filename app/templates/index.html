@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Trend Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fas fa-chart-line"></i>
+                <span>Git Trend Monitor</span>
+            </div>
+            <nav class="nav">
+                <a href="#" class="nav-item active" data-view="dashboard">
+                    <i class="fas fa-th-large"></i> 仪表盘
+                </a>
+                <a href="#" class="nav-item" data-view="all">
+                    <i class="fas fa-list"></i> 全部项目
+                </a>
+                <a href="#" class="nav-item" data-view="favorites">
+                    <i class="fas fa-star"></i> 收藏夹
+                </a>
+                <a href="#" class="nav-item" data-view="trending">
+                    <i class="fas fa-fire"></i> 趋势预警
+                </a>
+                <a href="#" class="nav-item" data-view="timeline">
+                    <i class="fas fa-clock"></i> 时间线
+                </a>
+            </nav>
+            
+            <!-- Shortcuts Cheat Sheet -->
+            <div class="shortcuts-help">
+                <h4><i class="fas fa-keyboard"></i> 快捷键指南</h4>
+                <ul>
+                    <li><kbd>↑</kbd> / <kbd>↓</kbd> 切换项目</li>
+                    <li><kbd>Enter</kbd> 打开网页</li>
+                    <li><kbd>V</kbd> 标为已看 (移除)</li>
+                    <li><kbd>F</kbd> 收藏 / 取消</li>
+                    <li><kbd>R</kbd> 查看 README</li>
+                    <li><kbd>Esc</kbd> 关闭弹窗</li>
+                </ul>
+            </div>
+
+            <div class="sidebar-footer">
+                <button id="btn-fetch" class="btn btn-primary btn-block">
+                    <i class="fas fa-sync"></i> 立即抓取
+                </button>
+                <div class="last-fetch">
+                    上次抓取: <span id="last-fetch-time">-</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-database"></i></div>
+                        <div class="stat-value" id="stat-total">0</div>
+                        <div class="stat-label">总项目数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-eye-slash"></i></div>
+                        <div class="stat-value" id="stat-unviewed">0</div>
+                        <div class="stat-label">未查看</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-star"></i></div>
+                        <div class="stat-value" id="stat-favorites">0</div>
+                        <div class="stat-label">收藏</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-fire"></i></div>
+                        <div class="stat-value" id="stat-trending">0</div>
+                        <div class="stat-label">趋势项目</div>
+                    </div>
+                    <div class="stat-card alert">
+                        <div class="stat-icon"><i class="fas fa-bolt"></i></div>
+                        <div class="stat-value" id="stat-spikes">0</div>
+                        <div class="stat-label">异常飙升</div>
+                    </div>
+                </div>
+
+                <div class="dashboard-row">
+                    <div class="card">
+                        <h3><i class="fas fa-code"></i> 热门语言分布</h3>
+                        <div class="lang-chart-container" style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="lang-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3><i class="fas fa-fire"></i> 24H 飙升榜</h3>
+                        <div id="velocity-list" class="spike-list"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3><i class="fas fa-fire"></i> 热门项目 Top 10</h3>
+                    <div id="top-projects" class="project-list"></div>
+                </div>
+            </section>
+
+            <!-- All Projects View -->
+            <section id="view-all" class="view">
+                <div class="toolbar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="search-input" placeholder="搜索项目名称或描述...">
+                    </div>
+                    <div class="filters">
+                        <select id="filter-language">
+                            <option value="">全部语言</option>
+                        </select>
+                        <select id="filter-stars">
+                            <option value="0">Star 数量</option>
+                            <option value="100">> 100</option>
+                            <option value="1000">> 1K</option>
+                            <option value="5000">> 5K</option>
+                            <option value="10000">> 10K</option>
+                        </select>
+                        <select id="filter-sort">
+                            <option value="stars">按 Star 排序</option>
+                            <option value="star_growth_24h">按 24h 增长</option>
+                            <option value="created_at">按创建时间</option>
+                            <option value="pushed_at">按更新时间</option>
+                        </select>
+                        <button id="btn-export-all" class="btn btn-outline btn-sm"><i class="fas fa-download"></i> 导出</button>
+                    </div>
+                    <div class="batch-actions">
+                        <button id="btn-batch-view" class="btn btn-sm">批量标记已查看</button>
+                    </div>
+                </div>
+                <div class="topic-cloud-container">
+                    <div id="topic-cloud" class="topic-cloud"></div>
+                </div>
+                <div id="projects-list" class="project-list"></div>
+                <div id="pagination" class="pagination"></div>
+            </section>
+
+            <!-- Favorites View -->
+            <section id="view-favorites" class="view">
+                <div class="toolbar" style="justify-content: space-between;">
+                    <h3><i class="fas fa-star"></i> 我的收藏</h3>
+                    <button id="btn-export-favorites" class="btn btn-outline btn-sm"><i class="fas fa-download"></i> 导出收藏</button>
+                </div>
+                <div id="favorites-list" class="project-list"></div>
+            </section>
+
+            <!-- Trending View -->
+            <section id="view-trending" class="view">
+                <div id="trending-list" class="project-list"></div>
+            </section>
+
+            <!-- Timeline View -->
+            <section id="view-timeline" class="view">
+                <div class="card">
+                    <h3><i class="fas fa-chart-bar"></i> 每日项目数量变化</h3>
+                    <div class="timeline-chart-container" style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="timeline-chart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="readme-drawer" id="readme-drawer">
+        <div class="drawer-overlay" id="drawer-overlay"></div>
+        <div class="drawer-content">
+            <div class="drawer-header">
+                <h3 id="drawer-title">README</h3>
+                <button class="btn-close" id="btn-close-drawer"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="drawer-body markdown-body" id="drawer-body">
+                <div class="loading"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
